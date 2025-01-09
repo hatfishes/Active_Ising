@@ -27,9 +27,9 @@ double acc_rate;
 double h = 0;   // external field
 double dh = 1/double(1000);
 double J = 1.0; //
-double k= 0.01; //regulation coefficient
+double k= 0.2; //regulation coefficient
 
-int Lx = 100000;
+int Lx = 10000;
 int Ly = 1;
 //int REGULAR_INT = Ly * Lx;
 int REGULAR_INT = 1;
