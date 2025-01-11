@@ -11,13 +11,13 @@
 #include <vector>
 using namespace ::std;
 
-int SAMPLE_INT = 10000000;
+int SAMPLE_INT = 10000;
 
 double T = 2;
 double dT = 0.1/1000;
 long long step = 0;
 double beta_ = 1.0 / T;
-long long totalstep = 100000000000;
+long long totalstep = 1000000000;
 string filename = "";
 string configfilename = "";
 
