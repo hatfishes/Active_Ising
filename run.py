@@ -7,12 +7,12 @@ import re
 #扫描的范围
 T_ = []
 l1 = np.linspace(1.273,1.285,10)
-l2 = np.linspace(0.5,1.5,10)
-l3 = np.linspace(1.042,1.047,10)
+l2 = np.linspace(1.1,1.5,10)
+l3 = np.linspace(1.0,1.1,10)
 l4 = np.linspace(0.95,1.05,10)
 T_ = np.sort(np.concatenate((l1, l2)))
 
-T_ = l1
+T_ = l3
 
 print(T_)
 #print(T_[10])

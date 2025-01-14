@@ -11,13 +11,13 @@
 #include <vector>
 using namespace ::std;
 
-int SAMPLE_INT = 10000;
+int SAMPLE_INT = 100000;
 
 double T = 2;
 double dT = 0.1/1000;
 long long step = 0;
 double beta_ = 1.0 / T;
-long long totalstep = 1000000000;
+long long totalstep = 10000000000;
 string filename = "";
 string configfilename = "";
 
@@ -27,9 +27,10 @@ double acc_rate;
 double h = 0;   // external field
 double dh = 1/double(1000);
 double J = 1.0; //
-double k= 0.2; //regulation coefficient
+double k= 0.115; //regulation coefficient
+int init_state = 0;
 
-int Lx = 10000;
+int Lx = 100000;
 int Ly = 1;
 //int REGULAR_INT = Ly * Lx;
 int REGULAR_INT = 1;
@@ -162,8 +163,11 @@ void init() {
 
   for (int i = 0; i < Lx; i++) {
     for (int j = 0; j < Ly; j++) {
-      spins[i][j].value = randSpin();
-     // spins[i][j].value = 1;
+      if(init_state == 0){
+        spins[i][j].value = randSpin();
+      }else{
+        spins[i][j].value = 1;
+      }
     }
   }
 
@@ -181,7 +185,7 @@ int main(int argc, char *argv[]) {
 
   // 生成文件名，使用的是专门用来拼接字符串的类
   ostringstream oss;
-  oss << "data/k" << k << "L" << Lx << "T" << T <<".csv";
+  oss << "data/k" << k << "L" << Lx << "T" << T <<"_" << init_state <<".csv";
   filename = oss.str();
   cout << filename << endl;
 

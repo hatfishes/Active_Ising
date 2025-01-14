@@ -30,7 +30,8 @@ binder_err_list = []
 folder_path = 'data/'
 
 
-filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)\.csv')
+#filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)\.csv')
+filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)[_](\d)\.csv')
 for file in listdir:
 # 使用正则表达式检查文件名是否匹配
     match = filename_pattern.match(file)
@@ -40,6 +41,8 @@ for file in listdir:
         k = float(match.group(1))  # k 可能是整数或浮点数
         Lx = int(match.group(3))  # L 是整数
         T = float(match.group(4))  # T 可能是整数或浮点数
+        init_state = int(match.group(6))  # 初始状态是整数 (0 或 1)
+
         file_path = os.path.join(folder_path, file)
 
         #file_path = os.path.join("data/", file)

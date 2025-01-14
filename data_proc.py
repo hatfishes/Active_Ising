@@ -16,13 +16,13 @@ J_set = 1
 # 定义文件夹路径
 folder_path = 'data/'
 #正则表达式
-filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)\.csv')
+#filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)\.csv')
+filename_pattern = re.compile(r'k(\d+(\.\d+)?)L(\d+)T(\d+(\.\d+)?)[_](\d)\.csv')
 #这是一个字典??或许不用字典更好
 data_dir = {}
 params_dir = {}
 #这是文件名字列表？
 listdir = os.listdir("data/")
-
 
 # 读取数据，输入是数据文件地址，返回是参数与数据的字典
 def read_data(listdir):
@@ -44,11 +44,11 @@ def read_data(listdir):
             k = float(match.group(1))  # k 可能是整数或浮点数
             Lx = int(match.group(3))  # L 是整数
             T = float(match.group(4))  # T 可能是整数或浮点数
+            init_state = int(match.group(6))  # 初始状态是整数 (0 或 1)
 
-            params_dir[(k, Lx, T, TotalStep, file)] = data
+            params_dir[(k, Lx, T, TotalStep,init_state ,file)] = data
             print(k,Lx,T,TotalStep,file)
     return params_dir
-
 
 ##这个是用来画图的，输入参数与数据的字典，输出图片，保存在img文件夹中
 def plot_for_each(params_dir):
@@ -73,13 +73,13 @@ def plot_for_each(params_dir):
         smoothed_magnet = sliding_window_average(Magnet, window_size)
         smoothed_enrgy = sliding_window_average(Energy, window_size)
         # 检测跳转点（稳定段之间的边界）
-        jump_indices = jump_point(data, window_size, threshold)
+        jump_indices = jump_point(data, 1000, threshold)
 
 
         # 绘制各个图表
         #axes[0, 0].scatter(step, Energy)
         axes[0, 0].plot(step, Energy)
-        axes[0, 0].plot(step, smoothed_enrgy)
+        #axes[0, 0].plot(step, smoothed_enrgy)
         axes[0, 0].set_title('Energy')
         axes[0, 0].set_xlabel('Step')
         axes[0, 0].set_ylabel('Energy')
@@ -88,7 +88,7 @@ def plot_for_each(params_dir):
 
         #axes[0, 1].scatter(step, Magnet)
         axes[0, 1].plot(step, Magnet)
-        axes[0, 1].plot(step, smoothed_magnet)
+        #axes[0, 1].plot(step, smoothed_magnet)
         axes[0, 1].set_ylim(-1.1, 1.1)
         axes[0, 1].set_title('Magnet')
         axes[0, 1].set_xlabel('Step')
@@ -134,7 +134,6 @@ def jump_point(data, window_size, threshold):
     jump_indices = [stable_indices[i] for i in range(1, len(stable_indices)) if stable_indices[i] > stable_indices[i - 1] + 1]
     return jump_indices
 
-
 def sliding_window_average(data, window_size):
     # 计算滑动平均
     smoothed = np.convolve(data, np.ones(window_size)/window_size, mode='valid')
@@ -172,29 +171,34 @@ def calculate_thermo(params_dir):
 
         # 将数据分段
         segments = np.split(data, jump_indices) # 按照跳转点分段
+        #前后5%的数据不要
+        segments = [segment.iloc[int(0.05 * len(segment)):int(0.95 * len(segment))] for segment in segments]
+    
 
         segments_0 = [segment for segment in segments if np.abs(segment["Magnet"].mean()) < 0.1]
         segments_1 = [segment for segment in segments if np.abs(segment["Magnet"].mean()) >= 0.1]
 
         segment_0 = pd.concat(segments_0) if segments_0 else pd.DataFrame()
         segment_1 = pd.concat(segments_1) if segments_1 else pd.DataFrame()
-
+    
         mean_E_0 = segment_0["Energy"].mean() if not segment_0.empty else np.nan
         mean_M_0 = segment_0["Magnet"].mean() if not segment_0.empty else np.nan
-        std_E_0 = segment_0["Energy"].std() if not segment_0.empty else np.nan
-        std_M_0 = segment_0["Magnet"].std() if not segment_0.empty else np.nan
+        error_E_0 = segment_0["Energy"].std() if not segment_0.empty else np.nan
+        error_M_0 = segment_0["Magnet"].std() if not segment_0.empty else np.nan
 
         mean_E_1 = segment_1["Energy"].mean() if not segment_1.empty else np.nan
         mean_M_1 = segment_1["Magnet"].mean() if not segment_1.empty else np.nan
-        std_E_1 = segment_1["Energy"].std() if not segment_1.empty else np.nan
-        std_M_1 = segment_1["Magnet"].std() if not segment_1.empty else np.nan
+        error_E_1 = segment_1["Energy"].std()/np.sqrt(len(segment_0)) if not segment_1.empty else np.nan
+        error_M_1 = segment_1["Magnet"].std()/np.sqrt(len(segment_1)) if not segment_1.empty else np.nan
+
+
 
         if not segment_0.empty:
-            state_0 = [mean_E_0, mean_M_0, std_E_0, std_M_0]
+            state_0 = [mean_E_0, mean_M_0, error_E_0, error_M_0]
             thermos.append([params[0], params[1], params[2], params[3], state_0])
         
         if not segment_1.empty:
-            state_1 = [mean_E_1, abs(mean_M_1), std_E_1, std_M_1]
+            state_1 = [mean_E_1, abs(mean_M_1), error_E_1, error_M_1]
             thermos.append([params[0], params[1], params[2], params[3], state_1])
     
     print(thermos)
@@ -206,12 +210,19 @@ def calculate_thermo(params_dir):
         mean_E, mean_M, std_E, std_M = state
         state_label = 0 if abs(mean_M) < 0.01 else 1
         expanded_thermos.append([k, Lx, T, TotalStep, mean_E, mean_M, std_E, std_M, state_label])
-    thermo_df = pd.DataFrame(expanded_thermos, columns=['k', 'Lx', 'T', 'TotalStep', 'mean_E', 'mean_M', 'std_E', 'std_M', 'State'])
+    thermo_df = pd.DataFrame(expanded_thermos, columns=['k', 'Lx', 'T', 'TotalStep', 'mean_E', 'mean_M', 'error_E', 'error_M', 'State'])
     thermo_df.to_csv('thermo_data.csv', index=False)
     return thermos
 
-# 输入segment_ds，画出图像，保存在img文件夹中
+
 def plot_thermos(thermos):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import os
+
+    # Ensure img directory exists
+    os.makedirs("img", exist_ok=True)
+
     # Group data by k
     grouped_thermos = {}
     for thermo in thermos:
@@ -221,42 +232,139 @@ def plot_thermos(thermos):
         grouped_thermos[k].append((T, state))
 
     # Plot mean_M and mean_E vs T for each k
-    for k, data in grouped_thermos.items():
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 12))
+
+    # Adjust color map to avoid too bright colors
+    colors = plt.cm.plasma(np.linspace(0.2, 0.8, len(grouped_thermos)))
+
+    # Initialize container for black lines
+    black_lines = {}
+
+    for (k, data), color in zip(grouped_thermos.items(), colors):
         data.sort()  # Sort by temperature T
         T_values = [item[0] for item in data]
         mean_E_values = [item[1][0] for item in data]
-        std_E_values = [item[1][2] for item in data]
+        error_E_values = [item[1][2] for item in data]
         mean_M_values = [item[1][1] for item in data]
-        std_M_values = [item[1][3] for item in data]
+        error_M_values = [item[1][3] for item in data]
 
-        fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 12))
+        # Record data for black lines
+        for T, state in data:
+            if T not in black_lines:
+                black_lines[T] = []
+            black_lines[T].append((k, state))
 
         # Plotting Mean Energy vs Temperature with error bars and caps
-        ax1.errorbar(T_values, mean_E_values, yerr=std_E_values, fmt='o', label=f'k={k}', capsize=5)
+        ax1.errorbar(T_values, mean_E_values, yerr=error_E_values, fmt='o', label=f'k={k}', capsize=5, color=color)
+        ax1.plot(T_values, mean_E_values, linestyle='-', color=color)  # Solid line
+
         ax1.set_xlabel('Temperature (T)')
-        ax1.set_xlim(1.2, 1.4)
+        ax1.set_xlim(0.9, 1.4)
         ax1.set_ylabel('Mean Energy')
         ax1.set_title('Mean Energy vs Temperature')
-        ax1.legend()
 
         # Plotting Mean Magnet vs Temperature with error bars and caps
-        ax2.errorbar(T_values, mean_M_values, yerr=std_M_values, fmt='s', label=f'k={k}', capsize=5)
+        ax2.errorbar(T_values, mean_M_values, yerr=error_M_values, fmt='s', label=f'k={k}', capsize=5, color=color)
+        ax2.plot(T_values, mean_M_values, linestyle='-', color=color)  # Solid line
+
         ax2.set_xlabel('Temperature (T)')
-        ax2.set_xlim(1.2, 1.4)
+        ax2.set_xlim(0.9, 1.4)
         ax2.set_ylabel('Mean Magnet')
         ax2.set_title('Mean Magnet vs Temperature')
-        ax2.legend()
 
-        # Add dashed lines between corresponding (k, T) pairs
-        for i in range(1, len(T_values)):
-            if T_values[i] == T_values[i-1]:  # Check if T values are the same
-                ax1.plot(T_values[i-1:i+1], mean_E_values[i-1:i+1], 'k--', lw=1)
-                ax2.plot(T_values[i-1:i+1], mean_M_values[i-1:i+1], 'k--', lw=1)
+    # Add black lines for same (k, T)
+    for T, states in black_lines.items():
+        if len(states) > 1:
+            k_values = [s[0] for s in states]
+            E_values = [s[1][0] for s in states]
+            M_values = [s[1][1] for s in states]
 
-        fig.tight_layout()
-        plt.savefig("img/thermo_mean_E_M_vs_T.png")
-        plt.close(fig)
+            # Connect points with black lines
+            ax1.plot([T] * len(k_values), E_values, color='black', linestyle='--', linewidth=0.7)
+            ax2.plot([T] * len(k_values), M_values, color='black', linestyle='--', linewidth=0.7)
 
+    ax1.legend()
+    ax2.legend()
+    fig.tight_layout()
+
+    # Save figure
+    plt.savefig("img/thermo_mean_E_M_vs_T.png")
+    plt.close(fig)
+    return fig
+
+def plot_thermos_v1(thermos):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import os
+
+    # Ensure img directory exists
+    os.makedirs("img", exist_ok=True)
+
+    # Group data by k
+    grouped_thermos = {}
+    for thermo in thermos:
+        k, Lx, T, TotalStep, state = thermo
+        if k not in grouped_thermos:
+            grouped_thermos[k] = []
+        grouped_thermos[k].append((T, state))
+
+    # Plot mean_M and mean_E vs T for each k
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(10, 12))
+
+    # Adjust color map to avoid too bright colors
+    colors = plt.cm.plasma(np.linspace(0.2, 0.8, len(grouped_thermos)))
+
+    # Initialize container for black lines
+    black_lines = {}
+
+    for (k, data), color in zip(grouped_thermos.items(), colors):
+        data.sort()  # Sort by temperature T
+        T_values = [item[0] for item in data]
+        mean_E_values = [item[1][0] for item in data]
+        error_E_values = [item[1][2] for item in data]
+        mean_M_values = [item[1][1] for item in data]
+        error_M_values = [item[1][3] for item in data]
+
+        # Record data for black lines
+        for T, state in data:
+            if T not in black_lines:
+                black_lines[T] = []
+            black_lines[T].append((k, state))
+
+        # Plotting Mean Energy vs Temperature with error bars and caps
+        ax1.errorbar(T_values, mean_E_values, yerr=error_E_values, fmt='o', label=f'k={k}', capsize=5, color=color)
+
+        ax1.set_xlabel('Temperature (T)')
+        ax1.set_xlim(0.9, 1.4)
+        ax1.set_ylabel('Mean Energy')
+        ax1.set_title('Mean Energy vs Temperature')
+
+        # Plotting Mean Magnet vs Temperature with error bars and caps
+        ax2.errorbar(T_values, mean_M_values, yerr=error_M_values, fmt='s', label=f'k={k}', capsize=5, color=color)
+
+        ax2.set_xlabel('Temperature (T)')
+        ax2.set_xlim(0.9, 1.4)
+        ax2.set_ylabel('Mean Magnet')
+        ax2.set_title('Mean Magnet vs Temperature')
+
+    # Add black dashed lines for same (k, T)
+    for T, states in black_lines.items():
+        if len(states) > 1:
+            k_values = [s[0] for s in states]
+            E_values = [s[1][0] for s in states]
+            M_values = [s[1][1] for s in states]
+
+            # Connect points with black dashed lines
+            ax1.plot([T] * len(k_values), E_values, color='black', linestyle='--', linewidth=1)
+            ax2.plot([T] * len(k_values), M_values, color='black', linestyle='--', linewidth=1)
+
+    ax1.legend()
+    ax2.legend()
+    fig.tight_layout()
+
+    # Save figure
+    plt.savefig("img/thermo_mean_E_M_vs_T.png")
+    plt.close(fig)
 
 
 if __name__ == "__main__":
